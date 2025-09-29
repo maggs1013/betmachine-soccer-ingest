@@ -1,5 +1,3 @@
-mkdir -p mappings
-cat > mappings/team_dictionary.csv <<'CSV'
 source,source_team,canonical_team
 # EPL (examples)
 api_football,Manchester United,Manchester United
@@ -45,7 +43,3 @@ odds_api,Wolverhampton,Wolves
 # Bundesliga (examples — add more as you expand)
 openligadb,Borussia Mönchengladbach,Borussia Monchengladbach
 openligadb,Bayer 04 Leverkusen,Bayer Leverkusen
-CSV
-
-git add mappings/team_dictionary.csv
-git commit -m "Seed team dictionary for canonical name joins"
