@@ -24,7 +24,13 @@ def norm_name(s):
 
 fx = fx.rename(columns={"home_team_canonical":"home_canon","away_team_canonical":"away_canon"})
 fdm = fdm.rename(columns={"home_team_canonical":"home_canon","away_team_canonical":"away_canon"})
-odds["match_date_utc"] = pd.to_datetime(odds.get("match_date_utc") or odds.get("date_utc"), utc=True, errors="coerce")
+if "match_date_utc" in odds.columns:
+    odds["match_date_utc"] = pd.to_datetime(odds["match_date_utc"], utc=True, errors="coerce")
+elif "date_utc" in odds.columns:
+    odds["match_date_utc"] = pd.to_datetime(odds["date_utc"], utc=True, errors="coerce")
+else:
+    odds["match_date_utc"] = pd.NaT
+
 fx["kickoff_utc"] = pd.to_datetime(fx["kickoff_utc"], utc=True, errors="coerce")
 fdm["kickoff_utc"] = pd.to_datetime(fdm["kickoff_utc"], utc=True, errors="coerce")
 
