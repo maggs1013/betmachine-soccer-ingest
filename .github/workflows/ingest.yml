@@ -96,9 +96,38 @@ jobs:
       - name: Capabilities probe (today)
         run: python src/capabilities_probe.py
 
+      # ---- Stage 7: Normalize sources & build master join ----
+      - name: Stage 7 — Normalize API-Football & FD.org
+        run: |
+          python src/stage7_normalize_api_football.py
+          python src/stage7_normalize_fdorg.py
+
+      - name: Stage 7 — Build master join
+        run: python src/stage7_build_master_join.py
+
+      # ---- Quick listing so logs show what's new ----
+      - name: List new files (normalized + joined)
+        run: |
+          echo "---- data/normalized ----"
+          find data/normalized -maxdepth 2 -type f | sort || true
+          echo "---- data/joined ----"
+          find data/joined -maxdepth 2 -type f | sort || true
+          echo "---- data/raw (top 3 levels) ----"
+          find data/raw -maxdepth 3 -type f | sort || true
+
+      # ---- Upload artifacts ----
       - name: Upload data snapshots
         uses: actions/upload-artifact@v4
         with:
-          name: soccer-raw-$(date +'%Y-%m-%dT%H-%M-%S')
+          name: soccer-raw-${{ github.run_id }}-${{ github.run_attempt }}
           path: data/raw
+          if-no-files-found: warn
+
+      - name: Upload Stage 7 outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage7-joined-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/normalized
+            data/joined
           if-no-files-found: warn
