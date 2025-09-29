@@ -2,25 +2,41 @@
 import json
 from pathlib import Path
 import pandas as pd
-from utils import today_dir
 
 RAW = Path("data/raw/footballdata_org")
 OUT = Path("data/normalized"); OUT.mkdir(parents=True, exist_ok=True)
-MAP = pd.read_csv("mappings/team_dictionary.csv")
+MAP_PATH = Path("mappings/team_dictionary.csv")
+
+def load_map():
+    if MAP_PATH.exists():
+        return pd.read_csv(MAP_PATH)
+    return pd.DataFrame(columns=["source","source_team","canonical_team"])
+
+MAP = load_map()
 
 def canon(df, src_col):
+    if df.empty or src_col not in df.columns:
+        return df
     m = MAP[MAP["source"]=="footballdata_org"][["source_team","canonical_team"]].drop_duplicates()
-    return df.merge(m, left_on=src_col, right_on="source_team", how="left").assign(
-        **{f"{src_col}_canonical": lambda d: d["canonical_team"].fillna(d[src_col])}
-    ).drop(columns=["source_team","canonical_team"])
+    if m.empty:
+        df[f"{src_col}_canonical"] = df[src_col]
+        return df
+    out = df.merge(m, left_on=src_col, right_on="source_team", how="left")
+    out[f"{src_col}_canonical"] = out["canonical_team"].fillna(out[src_col])
+    return out.drop(columns=["source_team","canonical_team"])
 
-def latest_dir(base): return sorted([p for p in base.glob("*") if p.is_dir()])[-1]
+def latest_dir(base):
+    dirs = [p for p in base.glob("*") if p.is_dir()]
+    return sorted(dirs)[-1] if dirs else None
 
-def load_json(path): return json.loads(Path(path).read_text(encoding="utf-8")).get("json", json.loads(Path(path).read_text()))
+def load_json(path):
+    txt = Path(path).read_text(encoding="utf-8")
+    obj = json.loads(txt)
+    return obj.get("json", obj)
 
 def flatten_matches(payload):
     rows=[]
-    for m in payload.get("matches", []):
+    for m in (payload.get("matches") or []):
         rows.append({
             "provider":"footballdata_org",
             "comp_code": (m.get("competition") or {}).get("code"),
@@ -32,16 +48,16 @@ def flatten_matches(payload):
             "ft_home_goals": ((m.get("score") or {}).get("fullTime") or {}).get("home"),
             "ft_away_goals": ((m.get("score") or {}).get("fullTime") or {}).get("away"),
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=[
+        "provider","comp_code","match_id","kickoff_utc","status",
+        "home_team","away_team","ft_home_goals","ft_away_goals"
+    ])
 
 if __name__ == "__main__":
     d = latest_dir(RAW)
-    f_future = next(d.glob("matches_future_*.json"), None)
-    f_past   = next(d.glob("matches_past_*.json"), None)
-
     frames=[]
-    for p in [f_future, f_past]:
-        if p and p.exists():
+    if d:
+        for p in [*d.glob("matches_future_*.json"), *d.glob("matches_past_*.json")]:
             payload = load_json(p)
             frames.append(flatten_matches(payload))
     df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
