@@ -2,12 +2,16 @@ name: Run ingest (soccer)
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "15 */6 * * *"   # every 6 hours
+  # every hour for better odds coverage (UTC). Adjust as needed.
+  schedule:
+    - cron: "0 * * * *"
+  # old example: every 6 hours
+  # - cron: "15 */6 * * *"
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,6 +33,11 @@ jobs:
           APIFOOTBALL_RAPIDAPI_KEY: ${{ secrets.APIFOOTBALL_RAPIDAPI_KEY }}
           FOOTBALLDATA_TOKEN: ${{ secrets.FOOTBALLDATA_TOKEN }}
         run: |
+          # ---- Presence checks (no secrets printed) ----
+          test -n "${ODDS_API_KEY}" && echo "ODDS_API_KEY: SET" || echo "ODDS_API_KEY: NOT SET"
+          test -n "${APIFOOTBALL_KEY}" && echo "APIFOOTBALL_KEY: SET" || echo "APIFOOTBALL_KEY: NOT SET"
+          test -n "${FOOTBALLDATA_TOKEN}" && echo "FOOTBALLDATA_TOKEN: SET" || echo "FOOTBALLDATA_TOKEN: NOT SET"
+
           # ---- Odds API (Stage 3) ----
           echo "ODDS_API_KEY=${ODDS_API_KEY}" >> $GITHUB_ENV
           echo "ODDS_REGIONS=us,uk,eu" >> $GITHUB_ENV
@@ -41,7 +50,7 @@ jobs:
           # ---- API-Football (Stage 6) ----
           echo "APIFOOTBALL_BASE=https://v3.football.api-sports.io" >> $GITHUB_ENV
           echo "APIFOOTBALL_KEY=${APIFOOTBALL_KEY}" >> $GITHUB_ENV
-          # If you ever switch to RapidAPI, uncomment and switch base:
+          # If you ever switch to RapidAPI, uncomment and switch base/keys:
           # echo "APIFOOTBALL_BASE=https://api-football-v1.p.rapidapi.com/v3" >> $GITHUB_ENV
           # echo "APIFOOTBALL_RAPIDAPI_KEY=${APIFOOTBALL_RAPIDAPI_KEY}" >> $GITHUB_ENV
           echo "APIFOOTBALL_LEAGUE_ID=39" >> $GITHUB_ENV
@@ -51,8 +60,10 @@ jobs:
           echo "FOOTBALLDATA_BASE=https://api.football-data.org/v4" >> $GITHUB_ENV
           echo "FOOTBALLDATA_TOKEN=${FOOTBALLDATA_TOKEN}" >> $GITHUB_ENV
 
-          # ---- Misc ----
+          # ---- Stage 6/7 knobs ----
           echo "PAGINATION_LIMIT=3" >> $GITHUB_ENV
+          # Join window (hours) for Stage 7; increase if you want more joins
+          echo "STAGE7_JOIN_HOURS=8" >> $GITHUB_ENV
 
       # ---- Stage 3: The Odds API ----
       - name: Pull odds (The Odds API)
@@ -72,6 +83,7 @@ jobs:
 
       # ---- Stage 2: OpenLigaDB + FBref helper ----
       - name: Pull fixtures/results (OpenLigaDB + FBref)
+        # continue-on-error: true   # Uncomment if you want to ignore any rare FBref failures
         run: |
           python src/openligadb_pull.py
           # FBref script already handles 403 gracefully and exits 0
@@ -80,11 +92,17 @@ jobs:
       # ---- Stage 6: NEW connectors (use the *connect* scripts) ----
       - name: API-Football (fixtures/lineups/injuries)
         if: env.APIFOOTBALL_KEY != '' || env.APIFOOTBALL_RAPIDAPI_KEY != ''
-        run: python src/api_football_connect.py
+        run: |
+          python src/api_football_connect.py || true
+          echo "--- AFTER API-FOOTBALL ---"
+          find data/raw/api_football -maxdepth 2 -type f | sort || true
 
       - name: Football-Data.org (official)
         if: env.FOOTBALLDATA_TOKEN != ''
-        run: python src/football_data_org_connect.py
+        run: |
+          python src/football_data_org_connect.py || true
+          echo "--- AFTER FOOTBALL-DATA.ORG ---"
+          find data/raw/footballdata_org -maxdepth 2 -type f | sort || true
 
       # ---- Canonicalize + reports (same as before) ----
       - name: Normalize to canonical (demo)
