@@ -1,0 +1,30 @@
+{
+  "description": "Minimal soccer match schema for early normalization.",
+  "fields": [
+    "provider",
+    "provider_event_id",
+    "competition",
+    "season",
+    "match_date_utc",
+    "home_team",
+    "away_team",
+    "status",
+    "score_home",
+    "score_away",
+    "odds_home",
+    "odds_draw",
+    "odds_away",
+    "total_goals_line",
+    "total_goals_over_price",
+    "total_goals_under_price",
+    "spread_home_line",
+    "spread_home_price",
+    "spread_away_line",
+    "spread_away_price",
+    "xg_home",
+    "xg_away",
+    "lineup_home_available",
+    "lineup_away_available",
+    "source_last_update"
+  ]
+}
