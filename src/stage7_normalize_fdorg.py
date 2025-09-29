@@ -1,3 +1,4 @@
+cat > src/stage7_normalize_fdorg.py <<'PY'
 #!/usr/bin/env python3
 import json
 from pathlib import Path
@@ -8,15 +9,12 @@ OUT = Path("data/normalized"); OUT.mkdir(parents=True, exist_ok=True)
 MAP_PATH = Path("mappings/team_dictionary.csv")
 
 def load_map():
-    if MAP_PATH.exists():
-        return pd.read_csv(MAP_PATH)
-    return pd.DataFrame(columns=["source","source_team","canonical_team"])
+    return pd.read_csv(MAP_PATH) if MAP_PATH.exists() else pd.DataFrame(columns=["source","source_team","canonical_team"])
 
 MAP = load_map()
 
 def canon(df, src_col):
-    if df.empty or src_col not in df.columns:
-        return df
+    if df.empty or src_col not in df.columns: return df
     m = MAP[MAP["source"]=="footballdata_org"][["source_team","canonical_team"]].drop_duplicates()
     if m.empty:
         df[f"{src_col}_canonical"] = df[src_col]
@@ -69,3 +67,8 @@ if __name__ == "__main__":
 
     df.to_parquet(OUT/"fdorg_matches.parquet", index=False)
     print("✅ Stage 7: normalized FD.org → data/normalized/fdorg_matches.parquet")
+PY
+
+chmod +x src/stage7_normalize_fdorg.py
+git add src/stage7_normalize_fdorg.py
+git commit -m "Stage 7: hardened FD.org normalizer"
