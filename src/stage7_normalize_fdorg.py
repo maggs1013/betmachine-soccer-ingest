@@ -1,4 +1,3 @@
-cat > src/stage7_normalize_fdorg.py <<'PY'
 #!/usr/bin/env python3
 import json
 from pathlib import Path
@@ -67,8 +66,3 @@ if __name__ == "__main__":
 
     df.to_parquet(OUT/"fdorg_matches.parquet", index=False)
     print("✅ Stage 7: normalized FD.org → data/normalized/fdorg_matches.parquet")
-PY
-
-chmod +x src/stage7_normalize_fdorg.py
-git add src/stage7_normalize_fdorg.py
-git commit -m "Stage 7: hardened FD.org normalizer"
