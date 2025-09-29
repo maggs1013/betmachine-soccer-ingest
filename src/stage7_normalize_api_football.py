@@ -1,35 +1,55 @@
 #!/usr/bin/env python3
-import json, zipfile, os
+import json
 from pathlib import Path
-from datetime import datetime, timezone
 import pandas as pd
 
 from utils import today_dir
 
 RAW = Path("data/raw/api_football")
 OUT = Path("data/normalized"); OUT.mkdir(parents=True, exist_ok=True)
-MAP = pd.read_csv("mappings/team_dictionary.csv")
+MAP_PATH = Path("mappings/team_dictionary.csv")
 
-def canon(df, src_col):
-    m = MAP[MAP["source"]=="api_football"][["source_team","canonical_team"]].drop_duplicates()
-    return df.merge(m, left_on=src_col, right_on="source_team", how="left").assign(
-        **{f"{src_col}_canonical": lambda d: d["canonical_team"].fillna(d[src_col])}
-    ).drop(columns=["source_team","canonical_team"])
+def load_map():
+    if MAP_PATH.exists():
+        m = pd.read_csv(MAP_PATH)
+        required = {"source","source_team","canonical_team"}
+        missing = required - set(m.columns)
+        if missing:
+            raise RuntimeError(f"team_dictionary.csv missing columns: {missing}")
+        return m
+    # fallback empty frame if mapping not present yet
+    return pd.DataFrame(columns=["source","source_team","canonical_team"])
+
+MAP = load_map()
+
+def canon(df, src_col, source_name):
+    if df.empty or src_col not in df.columns:
+        return df
+    m = MAP[MAP["source"]==source_name][["source_team","canonical_team"]].drop_duplicates()
+    if m.empty:
+        df[f"{src_col}_canonical"] = df[src_col]
+        return df
+    out = df.merge(m, left_on=src_col, right_on="source_team", how="left")
+    out[f"{src_col}_canonical"] = out["canonical_team"].fillna(out[src_col])
+    return out.drop(columns=["source_team","canonical_team"])
 
 def latest_dir(base):
-    return sorted([p for p in base.glob("*") if p.is_dir()])[-1]
+    dirs = [p for p in base.glob("*") if p.is_dir()]
+    return sorted(dirs)[-1] if dirs else None
 
 def load_json(path):
-    obj = json.loads(Path(path).read_text(encoding="utf-8"))
+    # handle fail-safe wrapper {"status_code":..., "json": {...}}
+    txt = Path(path).read_text(encoding="utf-8")
+    obj = json.loads(txt)
     return obj.get("json", obj)
 
 def flatten_fixtures(payload):
     resp = payload.get("response", [])
     rows = []
     for r in resp:
-        fx = r.get("fixture", {})
-        lg = r.get("league", {})
-        tm = r.get("teams", {})
+        fx = r.get("fixture", {}) or {}
+        lg = r.get("league", {}) or {}
+        tm = r.get("teams", {}) or {}
         rows.append({
             "provider":"api_football",
             "fixture_id": fx.get("id"),
@@ -37,19 +57,22 @@ def flatten_fixtures(payload):
             "league_id": lg.get("id"),
             "league_name": lg.get("name"),
             "season": lg.get("season"),
-            "home_team": tm.get("home",{}).get("name"),
-            "away_team": tm.get("away",{}).get("name"),
+            "home_team": (tm.get("home") or {}).get("name"),
+            "away_team": (tm.get("away") or {}).get("name"),
             "status": (fx.get("status") or {}).get("short"),
             "venue": (fx.get("venue") or {}).get("name")
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=[
+        "provider","fixture_id","kickoff_utc","league_id","league_name","season",
+        "home_team","away_team","status","venue"
+    ])
 
 def flatten_injuries(payload):
     resp = payload.get("response", [])
     rows = []
     for r in resp:
-        ply = r.get("player", {})
-        t = r.get("team", {})
+        ply = r.get("player", {}) or {}
+        t = r.get("team", {}) or {}
         rows.append({
             "provider":"api_football",
             "player_name": ply.get("name"),
@@ -59,33 +82,53 @@ def flatten_injuries(payload):
             "type": r.get("type"),
             "reason": r.get("reason"),
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=[
+        "provider","player_name","player_id","team_name","team_id","type","reason"
+    ])
 
 if __name__ == "__main__":
     d = latest_dir(RAW)
+    if not d:
+        print("No api_football raw directory yet — skip.")
+        # still write empty outputs to keep pipeline happy
+        pd.DataFrame().to_parquet(OUT/"api_football_fixtures.parquet", index=False)
+        pd.DataFrame().to_parquet(OUT/"api_football_injuries.parquet", index=False)
+        raise SystemExit(0)
+
     fx_path = next(d.glob("fixtures_future_*.json"), None)
     inj_path = next(d.glob("injuries_*_last14d.json"), None)
 
     # Fixtures
+    fx = pd.DataFrame()
     if fx_path and fx_path.exists():
-        fx_json = load_json(fx_path)
-        fx = flatten_fixtures(fx_json)
-        if not fx.empty:
-            fx = canon(fx, "home_team")
-            fx = canon(fx, "away_team")
-        fx["kickoff_utc"] = pd.to_datetime(fx["kickoff_utc"], utc=True, errors="coerce")
-        fx.to_parquet(OUT/"api_football_fixtures.parquet", index=False)
+        try:
+            fx_json = load_json(fx_path)
+            fx = flatten_fixtures(fx_json)
+            if not fx.empty:
+                fx = canon(fx, "home_team", "api_football")
+                fx = canon(fx, "away_team", "api_football")
+                if "kickoff_utc" in fx.columns:
+                    fx["kickoff_utc"] = pd.to_datetime(fx["kickoff_utc"], utc=True, errors="coerce")
+        except Exception as e:
+            print("Fixture normalize error:", e)
+    fx.to_parquet(OUT/"api_football_fixtures.parquet", index=False)
 
     # Injuries
+    inj = pd.DataFrame()
     if inj_path and inj_path.exists():
-        inj_json = load_json(inj_path)
-        inj = flatten_injuries(inj_json)
-        if not inj.empty:
-            inj = inj.merge(
-                MAP[MAP["source"]=="api_football"][["source_team","canonical_team"]].drop_duplicates(),
-                left_on="team_name", right_on="source_team", how="left"
-            ).assign(team_canonical=lambda d: d["canonical_team"].fillna(d["team_name"]))\
-             .drop(columns=["source_team","canonical_team"])
-        inj.to_parquet(OUT/"api_football_injuries.parquet", index=False)
+        try:
+            inj_json = load_json(inj_path)
+            inj = flatten_injuries(inj_json)
+            if not inj.empty:
+                m = MAP[MAP["source"]=="api_football"][["source_team","canonical_team"]].drop_duplicates()
+                if not m.empty:
+                    inj = inj.merge(m, left_on="team_name", right_on="source_team", how="left")\
+                             .assign(team_canonical=lambda d: d["canonical_team"].fillna(d["team_name"]))\
+                             .drop(columns=["source_team","canonical_team"])
+                else:
+                    inj["team_canonical"] = inj["team_name"]
+        except Exception as e:
+            print("Injuries normalize error:", e)
+    inj.to_parquet(OUT/"api_football_injuries.parquet", index=False)
 
     print("✅ Stage 7: normalized API-Football → data/normalized/*.parquet")
