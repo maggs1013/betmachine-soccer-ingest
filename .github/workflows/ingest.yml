@@ -3,7 +3,7 @@ name: Run ingest (soccer)
 on:
   workflow_dispatch:
   # schedule:
-  #   - cron: "15 */6 * * *"   # every 6 hours at :15
+  #   - cron: "15 */6 * * *"   # every 6 hours
 
 jobs:
   ingest:
@@ -22,20 +22,35 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Env vars
+      - name: Set env (common)
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
+          APIFOOTBALL_RAPIDAPI_KEY: ${{ secrets.APIFOOTBALL_RAPIDAPI_KEY }}
+          FOOTBALLDATA_TOKEN: ${{ secrets.FOOTBALLDATA_TOKEN }}
         run: |
           echo "ODDS_API_KEY=${ODDS_API_KEY}" >> $GITHUB_ENV
           echo "ODDS_REGIONS=us,uk,eu" >> $GITHUB_ENV
           echo "ODDS_FORMAT=decimal" >> $GITHUB_ENV
           echo "ODDS_SPORT_KEYS=soccer_epl,soccer_uefa_champs_league" >> $GITHUB_ENV
           echo "FBREF_LEAGUE_URL=https://fbref.com/en/comps/9/stats/Premier-League-Stats" >> $GITHUB_ENV
+          # API-Football defaults (direct mode)
+          echo "APIFOOTBALL_BASE=https://v3.football.api-sports.io" >> $GITHUB_ENV
+          echo "APIFOOTBALL_KEY=${APIFOOTBALL_KEY}" >> $GITHUB_ENV
+          # Uncomment next two lines if you use RapidAPI instead:
+          # echo "APIFOOTBALL_BASE=https://api-football-v1.p.rapidapi.com/v3" >> $GITHUB_ENV
+          # echo "APIFOOTBALL_RAPIDAPI_KEY=${APIFOOTBALL_RAPIDAPI_KEY}" >> $GITHUB_ENV
+          echo "APIFOOTBALL_LEAGUE_ID=39" >> $GITHUB_ENV
+          echo "APIFOOTBALL_SEASON=2024" >> $GITHUB_ENV
+          echo "FOOTBALLDATA_BASE=https://api.football-data.org/v4" >> $GITHUB_ENV
+          echo "FOOTBALLDATA_TOKEN=${FOOTBALLDATA_TOKEN}" >> $GITHUB_ENV
+          echo "PAGINATION_LIMIT=3" >> $GITHUB_ENV
 
-      - name: Pull odds (soccer)
+      - name: Pull odds (The Odds API)
+        if: env.ODDS_API_KEY != ''
         run: python src/odds_api_pull.py
 
-      - name: Pull historical (Football-Data)
+      - name: Pull historical odds/results (Football-Data.co.uk)
         run: python src/football_data_pull.py
 
       - name: Pull events (StatsBomb Open)
@@ -49,11 +64,22 @@ jobs:
           python src/openligadb_pull.py
           python src/fbref_pull.py
 
+      - name: Pull API-Football (fixtures/lineups/injuries/odds)
+        if: env.APIFOOTBALL_KEY != '' || env.APIFOOTBALL_RAPIDAPI_KEY != ''
+        run: python src/api_football_pull.py
+
+      - name: Pull Football-Data.org (official)
+        if: env.FOOTBALLDATA_TOKEN != ''
+        run: python src/football_data_org_pull.py
+
       - name: Normalize to canonical (demo)
         run: python src/normalize_soccer.py
 
       - name: Schema report
         run: python src/schema_report.py
+
+      - name: Capabilities probe (today)
+        run: python src/capabilities_probe.py
 
       - name: Upload data snapshots
         uses: actions/upload-artifact@v4
