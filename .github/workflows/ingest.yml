@@ -1,0 +1,63 @@
+name: Run ingest (soccer)
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "15 */6 * * *"   # every 6 hours at :15
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Env vars
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          echo "ODDS_API_KEY=${ODDS_API_KEY}" >> $GITHUB_ENV
+          echo "ODDS_REGIONS=us,uk,eu" >> $GITHUB_ENV
+          echo "ODDS_FORMAT=decimal" >> $GITHUB_ENV
+          echo "ODDS_SPORT_KEYS=soccer_epl,soccer_uefa_champs_league" >> $GITHUB_ENV
+          echo "FBREF_LEAGUE_URL=https://fbref.com/en/comps/9/stats/Premier-League-Stats" >> $GITHUB_ENV
+
+      - name: Pull odds (soccer)
+        run: python src/odds_api_pull.py
+
+      - name: Pull historical (Football-Data)
+        run: python src/football_data_pull.py
+
+      - name: Pull events (StatsBomb Open)
+        run: python src/statsbomb_open_pull.py
+
+      - name: Pull xG/xA (Understat)
+        run: python src/understat_pull.py
+
+      - name: Pull fixtures/results (OpenLigaDB + FBref)
+        run: |
+          python src/openligadb_pull.py
+          python src/fbref_pull.py
+
+      - name: Normalize to canonical (demo)
+        run: python src/normalize_soccer.py
+
+      - name: Schema report
+        run: python src/schema_report.py
+
+      - name: Upload data snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: soccer-raw-$(date +'%Y-%m-%dT%H-%M-%S')
+          path: data/raw
+          if-no-files-found: warn
