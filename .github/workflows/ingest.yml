@@ -29,49 +29,64 @@ jobs:
           APIFOOTBALL_RAPIDAPI_KEY: ${{ secrets.APIFOOTBALL_RAPIDAPI_KEY }}
           FOOTBALLDATA_TOKEN: ${{ secrets.FOOTBALLDATA_TOKEN }}
         run: |
+          # ---- Odds API (Stage 3) ----
           echo "ODDS_API_KEY=${ODDS_API_KEY}" >> $GITHUB_ENV
           echo "ODDS_REGIONS=us,uk,eu" >> $GITHUB_ENV
           echo "ODDS_FORMAT=decimal" >> $GITHUB_ENV
           echo "ODDS_SPORT_KEYS=soccer_epl,soccer_uefa_champs_league" >> $GITHUB_ENV
+
+          # ---- FBref target page (Stage 1 helper) ----
           echo "FBREF_LEAGUE_URL=https://fbref.com/en/comps/9/stats/Premier-League-Stats" >> $GITHUB_ENV
-          # API-Football defaults (direct mode)
+
+          # ---- API-Football (Stage 6) ----
           echo "APIFOOTBALL_BASE=https://v3.football.api-sports.io" >> $GITHUB_ENV
           echo "APIFOOTBALL_KEY=${APIFOOTBALL_KEY}" >> $GITHUB_ENV
-          # Uncomment next two lines if you use RapidAPI instead:
+          # If you ever switch to RapidAPI, uncomment and switch base:
           # echo "APIFOOTBALL_BASE=https://api-football-v1.p.rapidapi.com/v3" >> $GITHUB_ENV
           # echo "APIFOOTBALL_RAPIDAPI_KEY=${APIFOOTBALL_RAPIDAPI_KEY}" >> $GITHUB_ENV
           echo "APIFOOTBALL_LEAGUE_ID=39" >> $GITHUB_ENV
           echo "APIFOOTBALL_SEASON=2024" >> $GITHUB_ENV
+
+          # ---- Football-Data.org (Stage 6) ----
           echo "FOOTBALLDATA_BASE=https://api.football-data.org/v4" >> $GITHUB_ENV
           echo "FOOTBALLDATA_TOKEN=${FOOTBALLDATA_TOKEN}" >> $GITHUB_ENV
+
+          # ---- Misc ----
           echo "PAGINATION_LIMIT=3" >> $GITHUB_ENV
 
+      # ---- Stage 3: The Odds API ----
       - name: Pull odds (The Odds API)
         if: env.ODDS_API_KEY != ''
         run: python src/odds_api_pull.py
 
+      # ---- Stage 4: Football-Data.co.uk ----
       - name: Pull historical odds/results (Football-Data.co.uk)
         run: python src/football_data_pull.py
 
+      # ---- Stage 1: StatsBomb Open ----
       - name: Pull events (StatsBomb Open)
         run: python src/statsbomb_open_pull.py
 
       - name: Pull xG/xA (Understat)
         run: python src/understat_pull.py
 
+      # ---- Stage 2: OpenLigaDB + FBref helper ----
       - name: Pull fixtures/results (OpenLigaDB + FBref)
         run: |
           python src/openligadb_pull.py
+          # FBref script already handles 403 gracefully and exits 0
           python src/fbref_pull.py
 
-      - name: Pull API-Football (fixtures/lineups/injuries/odds)
+      # ---- Stage 6: NEW connectors (use the *connect* scripts) ----
+      - name: API-Football (fixtures/lineups/injuries)
         if: env.APIFOOTBALL_KEY != '' || env.APIFOOTBALL_RAPIDAPI_KEY != ''
-        run: python src/api_football_pull.py
+        run: python src/api_football_connect.py
 
-      - name: Pull Football-Data.org (official)
+      - name: Football-Data.org (official)
         if: env.FOOTBALLDATA_TOKEN != ''
-        run: python src/football_data_org_pull.py
+        run: python src/football_data_org_connect.py
 
+      # ---- Canonicalize + reports (same as before) ----
       - name: Normalize to canonical (demo)
         run: python src/normalize_soccer.py
 
