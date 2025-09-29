@@ -1,4 +1,3 @@
-cat > src/stage7_normalize_api_football.py <<'PY'
 #!/usr/bin/env python3
 import json
 from pathlib import Path
@@ -83,9 +82,7 @@ def flatten_injuries(payload):
 if __name__ == "__main__":
     d = latest_dir(RAW)
     OUT.mkdir(parents=True, exist_ok=True)
-
-    fx = pd.DataFrame()
-    inj = pd.DataFrame()
+    fx = pd.DataFrame(); inj = pd.DataFrame()
 
     if d:
         fx_path  = next(d.glob("fixtures_future_*.json"), None)
@@ -118,12 +115,6 @@ if __name__ == "__main__":
             except Exception as e:
                 print("Injuries normalize error:", e)
 
-    # Always write outputs (even if empty)
     fx.to_parquet(OUT/"api_football_fixtures.parquet", index=False)
     inj.to_parquet(OUT/"api_football_injuries.parquet", index=False)
     print("✅ Stage 7: normalized API-Football → data/normalized/*.parquet")
-PY
-
-chmod +x src/stage7_normalize_api_football.py
-git add src/stage7_normalize_api_football.py
-git commit -m "Stage 7: hardened API-Football normalizer"
