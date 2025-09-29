@@ -1,9 +1,51 @@
+mkdir -p mappings
+cat > mappings/team_dictionary.csv <<'CSV'
 source,source_team,canonical_team
+# EPL (examples)
 api_football,Manchester United,Manchester United
-api_football,Sunderland,Sunderland
+api_football,Man City,Manchester City
+api_football,Tottenham Hotspur,Tottenham Hotspur
+api_football,Newcastle United,Newcastle United
+api_football,Arsenal,Arsenal
+api_football,Chelsea,Chelsea
+api_football,Liverpool,Liverpool
+api_football,Leeds United,Leeds United
+api_football,West Ham United,West Ham United
+api_football,Bournemouth,AFC Bournemouth
+api_football,Fulham,Fulham
+api_football,Everton,Everton
+api_football,Aston Villa,Aston Villa
+api_football,Nottingham Forest,Nottingham Forest
+api_football,Crystal Palace,Crystal Palace
+api_football,Brighton & Hove Albion,Brighton
+api_football,Brentford,Brentford
+api_football,Wolverhampton Wanderers,Wolves
+api_football,Southampton,Southampton
+
 footballdata_org,Man United,Manchester United
-footballdata_org,Sunderland AFC,Sunderland
+footballdata_org,Manchester Utd,Manchester United
+footballdata_org,Man City,Manchester City
+footballdata_org,Tottenham,Tottenham Hotspur
+footballdata_org,West Ham,West Ham United
+footballdata_org,AFC Bournemouth,AFC Bournemouth
+footballdata_org,Newcastle,Newcastle United
+footballdata_org,Leeds,Leeds United
+footballdata_org,Nott'm Forest,Nottingham Forest
+footballdata_org,Brighton,Brighton
+footballdata_org,Wolves,Wolves
+
 odds_api,Man Utd,Manchester United
-odds_api,Sunderland,Sunderland
+odds_api,Man City,Manchester City
+odds_api,Spurs,Tottenham Hotspur
+odds_api,West Ham,West Ham United
+odds_api,Nottm Forest,Nottingham Forest
+odds_api,Brighton & Hove Albion,Brighton
+odds_api,Wolverhampton,Wolves
+
+# Bundesliga (examples — add more as you expand)
 openligadb,Borussia Mönchengladbach,Borussia Monchengladbach
 openligadb,Bayer 04 Leverkusen,Bayer Leverkusen
+CSV
+
+git add mappings/team_dictionary.csv
+git commit -m "Seed team dictionary for canonical name joins"
